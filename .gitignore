@@ -3,3 +3,5 @@
 chromedriver
 .env
 chrome-win64
+
+data.csv

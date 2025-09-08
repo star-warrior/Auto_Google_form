@@ -354,7 +354,7 @@ def main():
         
         # Final summary
         print(f"\n{'='*60}")
-        print("� FINAL SUMMARY")
+        print("📊 FINAL SUMMARY")
         print(f"{'='*60}")
         print(f"✅ Successful submissions: {successful_submissions}")
         print(f"❌ Failed submissions: {failed_submissions}")

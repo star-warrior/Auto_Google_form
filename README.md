@@ -28,7 +28,7 @@ pip install -r requirements.txt
 
 ### 2. CSV File Preparation
 
-Create a `form_data.csv` file with the following structure:
+Create a `data.csv` file with the following structure:
 
 ```csv
 partner_email,student_email,date,flow_status,file_path

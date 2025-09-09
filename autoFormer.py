@@ -14,7 +14,7 @@ form_link = "https://docs.google.com/forms/d/e/1FAIpQLSfW8n4SA_az3og8CNN6YQYOxWR
 # Configuration
 AUTO_SUBMIT = True  # Set to False if you want to review the form before submitting manually
 COOLDOWN_SECONDS = 20  # Wait time between form submissions
-CSV_FILE_PATH = "./form_data.csv"  # Path to CSV file containing form data
+CSV_FILE_PATH = "./data.csv"  # Path to CSV file containing form data
 
 def read_data_from_csv():
     """Read form data from CSV file"""

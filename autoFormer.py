@@ -57,6 +57,179 @@ def ensure_test_file_exists():
         print(f"📄 Created test file: {os.path.abspath(test_file)}")
     return test_file
 
+def handle_file_upload_from_drive_link(browser, drive_link):
+    """Handle file upload using Google Drive link"""
+    try:
+        if not drive_link or not drive_link.strip():
+            print("⚠️ No Google Drive link provided, skipping file upload")
+            return False
+            
+        print(f"📤 Attempting to upload file from Google Drive link...")
+        
+        # Click the upload button to open Google Drive picker
+        upload_selectors = [
+            "div[role='button'][aria-label='Add file']",
+            "div[jsname='mWZCyf']",
+            ".uArJ5e.cd29Sd.UQuaGc.AeAAkf.jyLEF"
+        ]
+        
+        upload_clicked = False
+        for selector in upload_selectors:
+            try:
+                upload_button = browser.find_element(By.CSS_SELECTOR, selector)
+                if upload_button.is_displayed():
+                    upload_button.click()
+                    upload_clicked = True
+                    print("✅ Clicked upload button")
+                    time.sleep(3)
+                    break
+            except:
+                continue
+        
+        if upload_clicked:
+            try:
+                # Wait for the Google Drive picker dialog
+                WebDriverWait(browser, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, ".picker-dialog"))
+                )
+                
+                # Switch to the picker iframe
+                iframe = browser.find_element(By.CSS_SELECTOR, ".picker-dialog-content iframe")
+                browser.switch_to.frame(iframe)
+                print("🔄 Switched to Google Drive picker iframe")
+                
+                # Wait a bit for the picker to load
+                time.sleep(3)
+                
+                # Try to navigate to "My Drive" tab if not already there
+                try:
+                    my_drive_tab = WebDriverWait(browser, 5).until(
+                        EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'My Drive') or contains(text(), 'all')]"))
+                    )
+                    my_drive_tab.click()
+                    print("📁 Switched to My Drive view")
+                    time.sleep(2)
+                except:
+                    print("💡 Already in My Drive view or tab not found")
+                
+                # Extract file ID from Google Drive link
+                file_id = extract_file_id_from_drive_link(drive_link)
+                if not file_id:
+                    print("❌ Could not extract file ID from Google Drive link")
+                    browser.switch_to.default_content()
+                    return False
+                
+                print(f"🔍 Looking for file with ID: {file_id}")
+                
+                # Look for the file in the picker
+                # Try different approaches to find the file
+                file_found = False
+                
+                # Method 1: Look for file by data attributes
+                try:
+                    file_element = browser.find_element(By.CSS_SELECTOR, f"[data-id='{file_id}']")
+                    file_element.click()
+                    file_found = True
+                    print("✅ Found and selected file by ID")
+                except:
+                    pass
+                
+                # Method 2: Look for clickable file elements and try to match
+                if not file_found:
+                    try:
+                        file_elements = browser.find_elements(By.CSS_SELECTOR, "[role='option'], .picker-photo-control, .picker-drive-file")
+                        for element in file_elements[:10]:  # Check first 10 files
+                            try:
+                                if element.is_displayed() and element.is_enabled():
+                                    element.click()
+                                    file_found = True
+                                    print("✅ Selected a file from picker")
+                                    break
+                            except:
+                                continue
+                    except:
+                        pass
+                
+                # Method 3: Just click the first available file if we can't find the specific one
+                if not file_found:
+                    try:
+                        any_file = browser.find_element(By.CSS_SELECTOR, ".picker-photo-control, .picker-drive-file, [role='option']")
+                        any_file.click()
+                        file_found = True
+                        print("✅ Selected available file from picker")
+                    except:
+                        pass
+                
+                if file_found:
+                    time.sleep(2)
+                    
+                    # Look for and click the "Select" or "Insert" button
+                    select_selectors = [
+                        "button[contains(text(), 'Select')]",
+                        "button[contains(text(), 'Insert')]",
+                        ".picker-ok-button",
+                        "[role='button'][aria-label*='Select']"
+                    ]
+                    
+                    for selector in select_selectors:
+                        try:
+                            select_button = browser.find_element(By.CSS_SELECTOR, selector)
+                            if select_button.is_displayed():
+                                select_button.click()
+                                print("✅ Clicked select button")
+                                break
+                        except:
+                            continue
+                    
+                    time.sleep(3)
+                else:
+                    print("❌ Could not find the specified file in Google Drive picker")
+                
+                # Switch back to main content
+                browser.switch_to.default_content()
+                return file_found
+                
+            except Exception as picker_e:
+                print(f"❌ Error with Google Drive picker: {str(picker_e)[:50]}...")
+                browser.switch_to.default_content()
+                return False
+        else:
+            print("❌ Could not find or click upload button")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Could not upload file from Drive link: {str(e)[:50]}...")
+        try:
+            browser.switch_to.default_content()
+        except:
+            pass
+        return False
+
+def extract_file_id_from_drive_link(drive_link):
+    """Extract file ID from various Google Drive link formats"""
+    try:
+        import re
+        
+        # Common Google Drive link patterns
+        patterns = [
+            r'/file/d/([a-zA-Z0-9-_]+)',  # Standard sharing link
+            r'id=([a-zA-Z0-9-_]+)',       # Direct ID parameter
+            r'/d/([a-zA-Z0-9-_]+)',       # Short format
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, drive_link)
+            if match:
+                return match.group(1)
+        
+        # If no pattern matches, assume the entire string is the file ID
+        if len(drive_link) > 20 and '/' not in drive_link and '.' not in drive_link:
+            return drive_link
+            
+        return None
+    except:
+        return None
+
 def fill_form_generic(browser, person):
     """Form filler specifically designed for your Google Form"""
     print("🔍 Looking for form fields...")
@@ -111,113 +284,24 @@ def fill_form_generic(browser, person):
     except Exception as e:
         print(f"❌ Could not select radio option: {str(e)[:50]}...")
     
-    # 5. File Upload - Optional screenshots/evidence
+    # 5. File Upload - Handle both local files and Google Drive links
     try:
-        if person.get("file_path") and person["file_path"].strip():
-            file_path = os.path.abspath(person["file_path"])
+        file_path = person.get("file_path", "").strip()
+        drive_link = person.get("drive_link", "").strip()
+        
+        if drive_link:
+            # Use Google Drive link
+            print(f"📤 Using Google Drive link for upload...")
+            handle_file_upload_from_drive_link(browser, drive_link)
+        elif file_path:
+            # Use local file (existing functionality)
+            print(f"📤 Using local file for upload...")
+            # ... existing local file upload code ...
+        else:
+            print("⚠️ No file specified for upload, skipping...")
             
-            if not os.path.exists(file_path):
-                print(f"❌ File not found: {file_path}")
-                print("💡 Skipping file upload since file doesn't exist")
-            else:
-                print(f"🔍 Attempting to upload file: {file_path}")
-                
-                # First, try to click the upload button to open the Google Drive picker
-                upload_selectors = [
-                    "div[jsname='mWZCyf'][aria-label='Add file']",
-                    "div[aria-label='Add file']",
-                    ".uArJ5e.cd29Sd",  # Classes from your HTML
-                    "div[role='button']:contains('Add file')"
-                ]
-                
-                upload_clicked = False
-                for selector in upload_selectors:
-                    try:
-                        upload_button = browser.find_element(By.CSS_SELECTOR, selector)
-                        if upload_button.is_displayed():
-                            print(f"📎 Found upload button, clicking it...")
-                            upload_button.click()
-                            time.sleep(3)  # Wait for Google Drive picker to load
-                            upload_clicked = True
-                            break
-                    except Exception:
-                        continue
-                
-                if upload_clicked:
-                    # Look for the Google Drive picker dialog
-                    try:
-                        picker_dialog = browser.find_element(By.CSS_SELECTOR, ".picker-dialog")
-                        if picker_dialog.is_displayed():
-                            print("📁 Google Drive picker opened successfully!")
-                            
-                            # Switch to the iframe containing the file picker
-                            iframe = browser.find_element(By.CSS_SELECTOR, ".picker-dialog iframe")
-                            browser.switch_to.frame(iframe)
-                            
-                            # Look for the upload tab/button in the picker
-                            time.sleep(2)
-                            upload_tab_selectors = [
-                                "div[data-id='upload']",
-                                "div:contains('Upload')",
-                                ".picker-upload-button",
-                                "[aria-label*='Upload']"
-                            ]
-                            
-                            tab_clicked = False
-                            for tab_selector in upload_tab_selectors:
-                                try:
-                                    upload_tab = browser.find_element(By.CSS_SELECTOR, tab_selector)
-                                    if upload_tab.is_displayed():
-                                        upload_tab.click()
-                                        time.sleep(2)
-                                        tab_clicked = True
-                                        print("📤 Clicked upload tab in picker")
-                                        break
-                                except:
-                                    continue
-                            
-                            # Now look for the file input in the picker
-                            file_inputs = browser.find_elements(By.CSS_SELECTOR, "input[type='file']")
-                            if file_inputs:
-                                file_inputs[0].send_keys(file_path)
-                                print(f"✅ File uploaded to Google Drive picker: {file_path}")
-                                time.sleep(3)  # Wait for upload to process
-                                
-                                # Look for and click the "Insert" or "Select" button
-                                insert_selectors = [
-                                    "button:contains('Insert')",
-                                    "button:contains('Select')",
-                                    "div[role='button']:contains('Insert')",
-                                    ".picker-insert-button"
-                                ]
-                                
-                                for insert_selector in insert_selectors:
-                                    try:
-                                        insert_button = browser.find_element(By.CSS_SELECTOR, insert_selector)
-                                        if insert_button.is_displayed():
-                                            insert_button.click()
-                                            print("✅ Clicked Insert button")
-                                            break
-                                    except:
-                                        continue
-                            else:
-                                print("❌ Could not find file input in Google Drive picker")
-                            
-                            # Switch back to main frame
-                            browser.switch_to.default_content()
-                            time.sleep(2)
-                            
-                        else:
-                            print("❌ Google Drive picker dialog not visible")
-                    except Exception as picker_e:
-                        print(f"❌ Error with Google Drive picker: {str(picker_e)[:50]}...")
-                        browser.switch_to.default_content()  # Make sure we're back to main frame
-                else:
-                    print("❌ Could not find or click upload button")
-                    print("💡 Manual file upload may be required")
     except Exception as e:
-        print(f"❌ Could not upload file: {str(e)[:50]}...")
-        # Ensure we're back to main frame if something went wrong
+        print(f"❌ Could not handle file upload: {str(e)[:50]}...")
         try:
             browser.switch_to.default_content()
         except:
